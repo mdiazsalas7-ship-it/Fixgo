@@ -6,6 +6,7 @@ import { auth, db } from '../../firebase/config';
 import { RecaptchaVerifier, signInWithPhoneNumber } from 'firebase/auth';
 import { doc, getDoc, setDoc } from 'firebase/firestore'; // Importamos Firestore
 import { Loader2 } from 'lucide-react';
+import OneSignal from 'react-onesignal'; // 🔥 NUEVO: Importamos OneSignal
 
 export default function LoginPage() {
   const router = useRouter();
@@ -59,7 +60,16 @@ export default function LoginPage() {
       const user = result.user;
       setUserUid(user.uid);
 
-      // --- AQUÍ ESTÁ LA MAGIA ---
+      // 🔥🔥🔥 CÓDIGO NUEVO AGREGADO AQUÍ 🔥🔥🔥
+      // Vinculamos el dispositivo al ID del usuario en OneSignal
+      try {
+        await OneSignal.login(user.uid);
+        console.log("✅ OneSignal vinculado con éxito al usuario:", user.uid);
+      } catch (osError) {
+        console.error("⚠️ Error vinculando OneSignal (no crítico):", osError);
+      }
+      // 🔥🔥🔥 FIN DEL CÓDIGO NUEVO 🔥🔥🔥
+
       // Verificamos si el usuario ya existe en Firestore
       const userDoc = await getDoc(doc(db, "users", user.uid));
 
