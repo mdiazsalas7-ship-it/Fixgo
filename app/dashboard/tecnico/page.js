@@ -8,14 +8,14 @@ import { collection, query, onSnapshot, doc, updateDoc, orderBy, addDoc, serverT
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import QRCode from "react-qr-code"; 
 import { CheckCircle, MapPin, Camera, LogOut, X, Briefcase, UploadCloud, Navigation, QrCode, MessageCircle, Send, ShieldAlert, FileText, User, Award, Plus } from 'lucide-react';
-import { sendNotification } from '../../../utils/notifications'; // Importar utilidad de notificaciones
+import { sendNotification } from '../../../utils/notifications'; 
 
 export default function TechnicianDashboard() {
   const router = useRouter();
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   
-  // DATOS DEL TÉCNICO (Score, Nivel, etc)
+  // DATOS DEL TÉCNICO
   const [techProfile, setTechProfile] = useState(null); 
   const [kycStatus, setKycStatus] = useState('unknown');
   
@@ -25,7 +25,7 @@ export default function TechnicianDashboard() {
   const [activeTab, setActiveTab] = useState('disponibles');
   const [showQr, setShowQr] = useState(false);
   
-  // ESTADOS PERFIL / CERTIFICACIONES
+  // ESTADOS PERFIL
   const [showProfile, setShowProfile] = useState(false);
   const [certifications, setCertifications] = useState([]);
   const [newCert, setNewCert] = useState({ name: '', file: null });
@@ -46,7 +46,7 @@ export default function TechnicianDashboard() {
       if (!currentUser) { router.push('/login'); return; }
       setUser(currentUser);
 
-      // Vincular ID de Firebase con OneSignal
+      // Vincular OneSignal
       import('react-onesignal').then((OneSignal) => {
         OneSignal.default.login(currentUser.uid);
         OneSignal.default.sendTag("role", "tecnico");
@@ -98,7 +98,7 @@ export default function TechnicianDashboard() {
               uploadedAt: serverTimestamp()
           });
           setNewCert({ name: '', file: null });
-          alert("🎓 Título subido. Esperando validación para sumar puntos.");
+          alert("🎓 Título subido. Esperando validación.");
       } catch (err) { console.error(err); alert("Error"); }
       finally { setUploadingCert(false); }
   };
@@ -115,10 +115,7 @@ export default function TechnicianDashboard() {
     if(!confirm("¿Aceptas el trabajo?")) return; 
     try { 
       await updateDoc(doc(db, "orders", order.id), { status: 'asignado', technicianId: user.uid, technicianPhone: user.phoneNumber }); 
-      
-      // 🔔 NOTIFICACIÓN AL CLIENTE
       await sendNotification("✅ ¡Tu técnico FixGo aceptó el trabajo y va en camino!", [order.userId]);
-      
       alert("✅ Trabajo aceptado."); 
       setSelectedOrder(null); 
       setActiveTab('mis_trabajos'); 
@@ -134,10 +131,7 @@ export default function TechnicianDashboard() {
       const snapshot = await uploadBytes(storageRef, proofImageFile); 
       const downloadURL = await getDownloadURL(snapshot.ref); 
       await updateDoc(doc(db, "orders", order.id), { status: 'terminado', completedAt: new Date(), proofImageUrl: downloadURL }); 
-      
-      // 🔔 NOTIFICACIÓN AL CLIENTE
       await sendNotification("🏆 ¡Trabajo completado! Por favor, califica el servicio.", [order.userId]);
-      
       alert("🏆 ¡Trabajo completado!"); 
       setSelectedOrder(null); 
     } catch (error) { alert("Error: " + error.message); } finally { setIsUploading(false); } 
@@ -145,7 +139,24 @@ export default function TechnicianDashboard() {
 
   const handleProofImageSelect = (e) => { const file = e.target.files[0]; if (file) { setProofImageFile(file); setProofPreviewUrl(URL.createObjectURL(file)); } };
   const clearProofImage = () => { setProofImageFile(null); setProofPreviewUrl(null); if (proofFileInputRef.current) proofFileInputRef.current.value = ''; };
-  const openWaze = (address) => { const query = encodeURIComponent(address + ", Panama"); window.open(`https://waze.com/ul?q=${query}&navigate=yes`, '_blank'); };
+
+  // 🔥 NUEVA FUNCIÓN WAZE INTELIGENTE 🚗
+  const openWaze = (order) => {
+    // 1. Intentamos usar coordenadas GPS (Más preciso)
+    // Probamos varios nombres comunes de campos por si acaso
+    const lat = order.lat || order.latitude || order.latitud || order.locationLat;
+    const lng = order.lng || order.longitude || order.longitud || order.locationLng;
+
+    if (lat && lng) {
+        const wazeUrl = `https://waze.com/ul?ll=${lat},${lng}&navigate=yes`;
+        window.open(wazeUrl, '_blank');
+    } else {
+        // 2. Si no hay GPS, usamos la dirección escrita
+        // Agregamos ", Venezuela" para mejorar la precisión de búsqueda
+        const query = encodeURIComponent(order.location + ", Venezuela");
+        window.open(`https://waze.com/ul?q=${query}&navigate=yes`, '_blank');
+    }
+  };
   
   const [kycData, setKycData] = useState({ name: '', idPhoto: null, recordPhoto: null });
   const [uploadingKyc, setUploadingKyc] = useState(false);
@@ -158,10 +169,7 @@ export default function TechnicianDashboard() {
     if (!newMessage.trim()) return; 
     try { 
       await addDoc(collection(db, "orders", selectedOrder.id, "messages"), { text: newMessage, senderId: user.uid, createdAt: serverTimestamp() }); 
-      
-      // 🔔 NOTIFICACIÓN AL CLIENTE
-      await sendNotification(`💬 Nuevo mensaje de tu técnico: ${newMessage}`, [selectedOrder.userId]);
-      
+      await sendNotification(`💬 Nuevo mensaje: ${newMessage}`, [selectedOrder.userId]);
       setNewMessage(''); 
     } catch (error) { console.error(error); } 
   };
@@ -272,7 +280,8 @@ export default function TechnicianDashboard() {
                           {selectedOrder.status === 'pendiente' && <button onClick={() => acceptJob(selectedOrder)} className="w-full bg-yellow-400 py-3 rounded-xl font-bold">Aceptar Trabajo</button>}
                           {selectedOrder.status === 'asignado' && !showQr && (
                             <div className="grid grid-cols-3 gap-2">
-                                <button onClick={() => openWaze(selectedOrder.location)} className="p-2 bg-blue-50 text-blue-600 rounded-xl font-bold text-xs flex flex-col items-center"><Navigation size={20}/>Waze</button>
+                                {/* 👇 BOTÓN WAZE MEJORADO (Se pasa el objeto completo) */}
+                                <button onClick={() => openWaze(selectedOrder)} className="p-2 bg-blue-50 text-blue-600 rounded-xl font-bold text-xs flex flex-col items-center"><Navigation size={20}/>Waze</button>
                                 <button onClick={() => setShowQr(true)} className="p-2 bg-gray-900 text-white rounded-xl font-bold text-xs flex flex-col items-center"><QrCode size={20}/>Pase</button>
                                 <button onClick={() => setShowChat(true)} className="p-2 bg-green-50 text-green-600 rounded-xl font-bold text-xs flex flex-col items-center"><MessageCircle size={20}/>Chat</button>
                             </div>
