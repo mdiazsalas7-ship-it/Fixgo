@@ -8,52 +8,39 @@ export default function OneSignalInit() {
   useEffect(() => {
     const runOneSignal = async () => {
       try {
-        // 1. Inicializar el SDK con tu App ID
+        // 1. Inicializar el SDK
         await OneSignal.init({
           appId: "9d81caa9-afe0-41d0-8790-e1f0f41a9a15",
-          allowLocalhostAsSecureOrigin: true, // Permite pruebas en tu PC
+          allowLocalhostAsSecureOrigin: true,
+          serviceWorkerParam: { scope: "/" }, // Asegura que el SW cubra toda la app
+          serviceWorkerPath: "OneSignalSDKWorker.js", // Nombre exacto del archivo en /public
           notifyButton: {
-            enable: true, // Muestra la campanita flotante
+            enable: true,
             position: 'bottom-right',
             colors: {
-              'circle.background': '#2563eb', // Azul FixGo
+              'circle.background': '#2563eb',
             },
-            text: {
-              'tip.state.unsubscribed': 'Suscribirse a notificaciones',
-              'tip.state.subscribed': 'Estás suscrito',
-              'message.prenotify': 'Haz clic para recibir avisos de tus servicios',
-            }
           },
-          promptOptions: {
-            slidedown: {
-              prompts: [
-                {
-                  type: "push",
-                  autoPrompt: true,
-                  text: {
-                    actionMessage: "Recibe avisos de tus técnicos y mensajes de chat al instante.",
-                    acceptButton: "Activar",
-                    cancelButton: "Luego"
-                  },
-                  delay: {
-                    pageViews: 1,
-                    timeDelay: 5
-                  }
-                }
-              ]
-            }
-          }
         });
 
-        // 2. Vincular el usuario de Firebase con OneSignal automáticamente
-        onAuthStateChanged(auth, (user) => {
+        // 2. Forzar el banner de suscripción si no hay permiso
+        if (OneSignal.Notifications.permission !== "granted") {
+           await OneSignal.Slidedown.promptPush();
+        }
+
+        // 3. Vincular con Firebase
+        onAuthStateChanged(auth, async (user) => {
           if (user) {
-            // Usamos el UID de Firebase como External User ID en OneSignal
-            // Esto permite enviar notificaciones usando [order.userId]
-            OneSignal.login(user.uid);
+            // Vinculamos el UID de Firebase con OneSignal
+            await OneSignal.login(user.uid);
             console.log("🔔 OneSignal vinculado con Firebase UID:", user.uid);
+            
+            // Etiquetar según el rol (opcional pero recomendado para el Admin)
+            // Esto ayuda a que el Admin autorice delegados eficientemente
+            const isDelegado = user.email && user.email.includes('tecnico'); 
+            if(isDelegado) await OneSignal.User.addTag("role", "delegado");
           } else {
-            OneSignal.logout();
+            await OneSignal.logout();
           }
         });
 
