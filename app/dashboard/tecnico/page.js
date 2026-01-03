@@ -172,7 +172,11 @@ export default function TechnicianDashboard() {
             <div key={order.id} onClick={() => setSelectedOrder(order)} className="bg-white p-4 rounded-xl shadow-md border-l-4 cursor-pointer hover:scale-[1.02] transition flex gap-4 items-center" style={{ borderLeftColor: activeTab === 'disponibles' ? '#FACC15' : '#22C55E' }}>
               <div className="w-16 h-16 bg-gray-200 rounded-lg overflow-hidden">{order.imageUrl ? <img src={order.imageUrl} className="w-full h-full object-cover"/> : <Camera className="m-auto mt-5 text-gray-400"/>}</div>
               <div className="flex-1">
-                <div className="flex justify-between"><h3 className="font-bold text-gray-800">{order.service}</h3><span className="text-xs font-bold bg-gray-100 px-2 py-1 rounded-full">${order.price}</span></div>
+                <div className="flex justify-between">
+                    <h3 className="font-bold text-gray-800">{order.service}</h3>
+                    {/* AQUI ESTA EL CAMBIO DE COLOR DE PRECIO: text-black */}
+                    <span className="text-xs font-bold bg-gray-100 text-black px-2 py-1 rounded-full">${order.price}</span>
+                </div>
                 <p className="text-xs text-gray-500 mt-1"><MapPin size={10} className="inline"/> {order.location}</p>
               </div>
             </div>

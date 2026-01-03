@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { auth, db, storage } from '../../../firebase/config'; 
 import { signOut, onAuthStateChanged } from 'firebase/auth';
-import { collection, addDoc, query, where, onSnapshot, serverTimestamp, doc, updateDoc, orderBy } from 'firebase/firestore';
+import { collection, addDoc, query, where, onSnapshot, serverTimestamp, doc, updateDoc, orderBy, getDoc } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { MapPin, LogOut, Camera, XCircle, Star, CheckCircle, ShoppingBag, MessageCircle, Send } from 'lucide-react';
 
@@ -111,11 +111,36 @@ export default function Dashboard() {
     finally { setLoading(false); }
   };
 
+  // --- LÓGICA DE CALIFICACIÓN Y PUNTOS ---
   const submitRating = async (stars) => {
     if (!ratingOrder) return;
     try {
+        // 1. Cerrar la orden y guardar estrellas
         await updateDoc(doc(db, "orders", ratingOrder.id), { status: 'cerrado', rating: stars });
-        alert(`⭐️ ¡Gracias!`); setRatingOrder(null); 
+        
+        // 2. Dar puntos al Técnico (Gamificación)
+        if (ratingOrder.technicianId) {
+            const techRef = doc(db, "technicians", ratingOrder.technicianId);
+            const techSnap = await getDoc(techRef);
+            
+            if (techSnap.exists()) {
+                const currentScore = techSnap.data().score || 0;
+                let pointsToAdd = 0;
+                
+                // Reglas de Puntos por Estrellas
+                if (stars === 5) pointsToAdd = 5;       // Excelencia
+                else if (stars === 4) pointsToAdd = 3;  // Muy bueno
+                else if (stars === 3) pointsToAdd = 1;  // Regular
+                
+                // Solo actualizamos si hay puntos que sumar
+                if (pointsToAdd > 0) {
+                    await updateDoc(techRef, { score: currentScore + pointsToAdd });
+                }
+            }
+        }
+
+        alert(`⭐️ ¡Gracias!`); 
+        setRatingOrder(null); 
     } catch (error) { console.error(error); }
   };
 
