@@ -1,24 +1,35 @@
-// utils/notifications.js
-export const sendNotification = async (message, playerIds = []) => {
-  // Ahora leemos las variables del archivo .env.local
+// Archivo: src/utils/notifications.js
+
+export const sendNotification = async (message, playerIds = [], targetUrl = "/dashboard") => {
+  // 1. Leemos las variables de entorno
   const ONESIGNAL_APP_ID = process.env.NEXT_PUBLIC_ONESIGNAL_APP_ID;
   const ONESIGNAL_REST_API_KEY = process.env.NEXT_PUBLIC_ONESIGNAL_API_KEY;
 
+  // --- DIAGNÓSTICO (Míralo en la consola F12) ---
+  console.log("🔍 [Debug] Intentando enviar notificación...");
   if (!ONESIGNAL_REST_API_KEY) {
-    console.error("❌ Falta la API KEY en .env.local");
+    console.error("❌ [Error] NO se encontró la API KEY. Reinicia el servidor con 'npm run dev'.");
     return;
   }
+  // ----------------------------------------------
 
   const data = {
     app_id: ONESIGNAL_APP_ID,
     contents: { "es": message },
-    headings: { "es": "FixGo 🔧" }
+    headings: { "es": "FixGo 🔧" },
+    name: "Notificación Automática FixGo",
+    url: typeof window !== 'undefined' ? `${window.location.origin}${targetUrl}` : targetUrl, 
   };
 
-  if (playerIds.length > 0) {
-    data.include_external_user_ids = playerIds; 
+  // 2. Lógica de Seguridad para Destinatarios
+  if (playerIds && playerIds.length > 0) {
+    // Enviamos a usuarios específicos por su UID de Firebase
+    data.include_external_user_ids = playerIds;
+    data.channel_for_external_user_ids = "push"; // Forzar Push
   } else {
-    data.included_segments = ["All"]; 
+    // PROTECCIÓN: Evitar envío masivo por error
+    console.warn("⚠️ [Alerta] Se intentó enviar sin destinatarios. Cancelando.");
+    return; 
   }
 
   try {
@@ -26,14 +37,24 @@ export const sendNotification = async (message, playerIds = []) => {
       method: "POST",
       headers: {
         "Content-Type": "application/json; charset=utf-8",
-        // Importante: Mantener la palabra Basic + espacio
+        // La palabra 'Basic ' es OBLIGATORIA
         "Authorization": `Basic ${ONESIGNAL_REST_API_KEY}`
       },
       body: JSON.stringify(data)
     });
+
     const result = await response.json();
-    console.log("🔔 Notificación enviada:", result);
+
+    // 3. Resultado
+    if (result.errors) {
+        console.error("❌ [OneSignal Error]:", result.errors);
+    } else if (result.recipients === 0) {
+        console.warn("⚠️ [Aviso]: OneSignal recibió la orden, pero el usuario NO tiene dispositivos suscritos.");
+    } else {
+        console.log(`✅ [Éxito]: Notificación enviada. ID: ${result.id}`);
+    }
+    
   } catch (err) {
-    console.error("❌ Error enviando notificación:", err);
+    console.error("❌ [Error de Red]:", err);
   }
 };
