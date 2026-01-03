@@ -7,6 +7,7 @@ import { signOut, onAuthStateChanged } from 'firebase/auth';
 import { collection, addDoc, query, where, onSnapshot, serverTimestamp, doc, updateDoc, orderBy, getDoc } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { MapPin, LogOut, Camera, XCircle, Star, CheckCircle, ShoppingBag, MessageCircle, Send } from 'lucide-react';
+import { sendNotification } from '../../../utils/notifications'; // Importar utilidad de notificaciones
 
 export default function Dashboard() {
   const router = useRouter();
@@ -20,11 +21,11 @@ export default function Dashboard() {
   const [previewUrl, setPreviewUrl] = useState(null);
   const fileInputRef = useRef(null);
   
-  // ESTADOS NUEVOS (Chat y Calificación)
+  // ESTADOS (Chat y Calificación)
   const [ratingOrder, setRatingOrder] = useState(null);
-  const [chatOrder, setChatOrder] = useState(null); // Orden abierta en el chat
-  const [messages, setMessages] = useState([]);     // Mensajes del chat
-  const [newMessage, setNewMessage] = useState(''); // Input del chat
+  const [chatOrder, setChatOrder] = useState(null); 
+  const [messages, setMessages] = useState([]);     
+  const [newMessage, setNewMessage] = useState(''); 
   const chatScrollRef = useRef(null);
 
   useEffect(() => {
@@ -54,11 +55,9 @@ export default function Dashboard() {
   // --- LÓGICA DEL CHAT EN TIEMPO REAL ---
   useEffect(() => {
     if (chatOrder) {
-        // Escuchar la sub-colección "messages" dentro de la orden
         const q = query(collection(db, "orders", chatOrder.id, "messages"), orderBy("createdAt", "asc"));
         const unsub = onSnapshot(q, (snap) => {
             setMessages(snap.docs.map(d => ({id: d.id, ...d.data()})));
-            // Scroll al fondo automático
             setTimeout(() => chatScrollRef.current?.scrollIntoView({ behavior: "smooth" }), 100);
         });
         return () => unsub();
@@ -71,13 +70,18 @@ export default function Dashboard() {
     try {
         await addDoc(collection(db, "orders", chatOrder.id, "messages"), {
             text: newMessage,
-            senderId: user.uid, // Yo envié el mensaje
+            senderId: user.uid,
             createdAt: serverTimestamp()
         });
+
+        // 🔔 NOTIFICACIÓN AL TÉCNICO
+        if (chatOrder.technicianId) {
+            await sendNotification(`💬 Mensaje del cliente: ${newMessage}`, [chatOrder.technicianId]);
+        }
+
         setNewMessage('');
     } catch (error) { console.error("Error enviando mensaje", error); }
   };
-  // ----------------------------------------
 
   const handleImageSelect = (e) => {
     const file = e.target.files[0];
@@ -106,19 +110,20 @@ export default function Dashboard() {
         location: address,
         imageUrl: imageUrl
       });
+
+      // 🔔 NOTIFICACIÓN A TODOS LOS TÉCNICOS
+      await sendNotification(`🔧 ¡Nueva solicitud de ${serviceName} disponible!`);
+
       alert("✅ Solicitud enviada"); clearImage();
     } catch (error) { console.error(error); alert("Error: " + error.message); } 
     finally { setLoading(false); }
   };
 
-  // --- LÓGICA DE CALIFICACIÓN Y PUNTOS ---
   const submitRating = async (stars) => {
     if (!ratingOrder) return;
     try {
-        // 1. Cerrar la orden y guardar estrellas
         await updateDoc(doc(db, "orders", ratingOrder.id), { status: 'cerrado', rating: stars });
         
-        // 2. Dar puntos al Técnico (Gamificación)
         if (ratingOrder.technicianId) {
             const techRef = doc(db, "technicians", ratingOrder.technicianId);
             const techSnap = await getDoc(techRef);
@@ -126,16 +131,16 @@ export default function Dashboard() {
             if (techSnap.exists()) {
                 const currentScore = techSnap.data().score || 0;
                 let pointsToAdd = 0;
+                if (stars === 5) pointsToAdd = 5;
+                else if (stars === 4) pointsToAdd = 3;
+                else if (stars === 3) pointsToAdd = 1;
                 
-                // Reglas de Puntos por Estrellas
-                if (stars === 5) pointsToAdd = 5;       // Excelencia
-                else if (stars === 4) pointsToAdd = 3;  // Muy bueno
-                else if (stars === 3) pointsToAdd = 1;  // Regular
-                
-                // Solo actualizamos si hay puntos que sumar
                 if (pointsToAdd > 0) {
                     await updateDoc(techRef, { score: currentScore + pointsToAdd });
                 }
+                
+                // 🔔 NOTIFICACIÓN AL TÉCNICO SOBRE SU CALIFICACIÓN
+                await sendNotification(`⭐ El cliente te calificó con ${stars} estrellas. ¡Buen trabajo!`, [ratingOrder.technicianId]);
             }
         }
 
@@ -148,25 +153,18 @@ export default function Dashboard() {
 
   return (
     <div className="min-h-screen bg-gray-50 pb-10">
-      {/* HEADER CON NUEVO LOGO FIXGO */}
+      {/* HEADER */}
       <div className="bg-blue-600 px-6 pt-12 pb-24 rounded-b-[2.5rem] shadow-lg relative z-10">
         <div className="flex justify-between items-center text-white mb-4">
-          
           <div className="flex items-center gap-3">
-             <img 
-               src="https://i.postimg.cc/J7y2CTsc/unnamed.jpg" 
-               alt="FixGo Logo"
-               className="w-12 h-12 rounded-xl shadow-md border-2 border-white/20"
-             />
+             <img src="https://i.postimg.cc/J7y2CTsc/unnamed.jpg" alt="FixGo Logo" className="w-12 h-12 rounded-xl shadow-md border-2 border-white/20"/>
              <div>
                 <h1 className="text-xl font-bold">FixGo</h1>
                 <p className="text-blue-100 text-sm">{user?.phoneNumber}</p>
              </div>
           </div>
-
           <button onClick={handleLogout} className="bg-white/20 p-2 rounded-full"><LogOut size={18} /></button>
         </div>
-        
         <div className="bg-blue-700/50 p-3 rounded-xl flex items-center gap-3 border border-blue-400/30">
           <MapPin className="text-blue-200" size={20} />
           <input type="text" placeholder="Escribe Torre y Apto..." className="bg-transparent text-white placeholder-blue-200 w-full outline-none text-sm font-medium" value={address} onChange={(e) => setAddress(e.target.value)}/>
@@ -220,12 +218,8 @@ export default function Dashboard() {
                 </div>
                 <p className="text-xs text-gray-400 flex items-center gap-1"><MapPin size={10} /> {order.location} • <span className="uppercase">{order.status}</span></p>
                 
-                {/* BOTÓN DE CHAT (Solo si está asignado o terminado) */}
                 {(order.status === 'asignado' || order.status === 'terminado') && (
-                    <button 
-                        onClick={() => setChatOrder(order)}
-                        className="w-full flex items-center justify-center gap-2 bg-blue-100 text-blue-700 py-2 rounded-lg font-bold text-sm hover:bg-blue-200 transition"
-                    >
+                    <button onClick={() => setChatOrder(order)} className="w-full flex items-center justify-center gap-2 bg-blue-100 text-blue-700 py-2 rounded-lg font-bold text-sm hover:bg-blue-200 transition">
                         <MessageCircle size={16} /> Chat con Técnico
                     </button>
                 )}
@@ -239,12 +233,10 @@ export default function Dashboard() {
         )}
       </div>
 
-      {/* --- MODAL DE CHAT --- */}
+      {/* MODAL DE CHAT */}
       {chatOrder && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-end sm:items-center justify-center backdrop-blur-sm">
             <div className="bg-white w-full sm:max-w-md h-[80vh] sm:h-[600px] rounded-t-3xl sm:rounded-3xl shadow-2xl flex flex-col overflow-hidden animate-in slide-in-from-bottom duration-300">
-                
-                {/* Header Chat */}
                 <div className="bg-blue-600 p-4 text-white flex justify-between items-center">
                     <div>
                         <h3 className="font-bold">{chatOrder.service}</h3>
@@ -252,8 +244,6 @@ export default function Dashboard() {
                     </div>
                     <button onClick={() => setChatOrder(null)} className="p-2 bg-white/20 rounded-full hover:bg-white/30"><XCircle size={20}/></button>
                 </div>
-
-                {/* Área de Mensajes */}
                 <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-gray-50">
                     {messages.length === 0 && <p className="text-center text-gray-400 text-sm mt-10">Inicia la conversación...</p>}
                     {messages.map((msg) => {
@@ -268,25 +258,15 @@ export default function Dashboard() {
                     })}
                     <div ref={chatScrollRef} />
                 </div>
-
-                {/* Input */}
                 <form onSubmit={sendMessage} className="p-3 bg-white border-t flex gap-2">
-                    <input 
-                        type="text" 
-                        className="flex-1 bg-gray-100 rounded-full px-4 py-3 outline-none focus:ring-2 focus:ring-blue-500"
-                        placeholder="Escribe un mensaje..."
-                        value={newMessage}
-                        onChange={(e) => setNewMessage(e.target.value)}
-                    />
-                    <button type="submit" className="bg-blue-600 text-white p-3 rounded-full hover:bg-blue-700 transition disabled:opacity-50" disabled={!newMessage.trim()}>
-                        <Send size={20} />
-                    </button>
+                    <input type="text" className="flex-1 bg-gray-100 rounded-full px-4 py-3 outline-none focus:ring-2 focus:ring-blue-500" placeholder="Escribe un mensaje..." value={newMessage} onChange={(e) => setNewMessage(e.target.value)}/>
+                    <button type="submit" className="bg-blue-600 text-white p-3 rounded-full hover:bg-blue-700 transition disabled:opacity-50" disabled={!newMessage.trim()}><Send size={20} /></button>
                 </form>
             </div>
         </div>
       )}
 
-      {/* MODAL CALIFICACIÓN (Sin cambios) */}
+      {/* MODAL CALIFICACIÓN */}
       {ratingOrder && (
         <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
           <div className="bg-white w-full max-w-sm rounded-3xl overflow-hidden shadow-2xl animate-in fade-in zoom-in duration-300">
