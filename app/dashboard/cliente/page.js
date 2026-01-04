@@ -7,7 +7,7 @@ import { signOut, onAuthStateChanged } from 'firebase/auth';
 import { collection, addDoc, query, where, onSnapshot, serverTimestamp, doc, updateDoc, orderBy, getDoc } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { MapPin, LogOut, Camera, XCircle, Star, CheckCircle, ShoppingBag, MessageCircle, Send } from 'lucide-react';
-import { sendNotification } from '../../../utils/notifications'; // Importar utilidad de notificaciones
+import { sendNotification } from '../../../utils/notifications'; 
 
 export default function Dashboard() {
   const router = useRouter();
@@ -244,6 +244,8 @@ export default function Dashboard() {
                     </div>
                     <button onClick={() => setChatOrder(null)} className="p-2 bg-white/20 rounded-full hover:bg-white/30"><XCircle size={20}/></button>
                 </div>
+                
+                {/* 🟢 ZONA DE CHAT CORREGIDA PARA LEGIBILIDAD */}
                 <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-gray-50">
                     {messages.length === 0 && <p className="text-center text-gray-400 text-sm mt-10">Inicia la conversación...</p>}
                     {messages.map((msg) => {
@@ -258,8 +260,10 @@ export default function Dashboard() {
                     })}
                     <div ref={chatScrollRef} />
                 </div>
+
                 <form onSubmit={sendMessage} className="p-3 bg-white border-t flex gap-2">
-                    <input type="text" className="flex-1 bg-gray-100 rounded-full px-4 py-3 outline-none focus:ring-2 focus:ring-blue-500" placeholder="Escribe un mensaje..." value={newMessage} onChange={(e) => setNewMessage(e.target.value)}/>
+                    {/* 🟢 INPUT CORREGIDO: text-gray-900 */}
+                    <input type="text" className="flex-1 bg-gray-100 text-gray-900 rounded-full px-4 py-3 outline-none focus:ring-2 focus:ring-blue-500" placeholder="Escribe un mensaje..." value={newMessage} onChange={(e) => setNewMessage(e.target.value)}/>
                     <button type="submit" className="bg-blue-600 text-white p-3 rounded-full hover:bg-blue-700 transition disabled:opacity-50" disabled={!newMessage.trim()}><Send size={20} /></button>
                 </form>
             </div>

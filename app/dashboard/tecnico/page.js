@@ -143,7 +143,6 @@ export default function TechnicianDashboard() {
   // 🔥 NUEVA FUNCIÓN WAZE INTELIGENTE 🚗
   const openWaze = (order) => {
     // 1. Intentamos usar coordenadas GPS (Más preciso)
-    // Probamos varios nombres comunes de campos por si acaso
     const lat = order.lat || order.latitude || order.latitud || order.locationLat;
     const lng = order.lng || order.longitude || order.longitud || order.locationLng;
 
@@ -151,8 +150,7 @@ export default function TechnicianDashboard() {
         const wazeUrl = `https://waze.com/ul?ll=${lat},${lng}&navigate=yes`;
         window.open(wazeUrl, '_blank');
     } else {
-        // 2. Si no hay GPS, usamos la dirección escrita
-        // Agregamos ", Venezuela" para mejorar la precisión de búsqueda
+        // 2. Si no hay GPS, usamos la dirección escrita + Venezuela
         const query = encodeURIComponent(order.location + ", Venezuela");
         window.open(`https://waze.com/ul?q=${query}&navigate=yes`, '_blank');
     }
@@ -266,11 +264,28 @@ export default function TechnicianDashboard() {
               {showChat ? (
                   <div className="flex flex-col h-[500px]">
                       <div className="bg-gray-900 p-4 text-white flex justify-between items-center"><h3 className="font-bold">Chat</h3><button onClick={() => setShowChat(false)}>Cerrar</button></div>
+                      
+                      {/* 🟢 ZONA DE MENSAJES CORREGIDA */}
                       <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-gray-50">
-                          {messages.map((msg) => { const isMe = msg.senderId === user.uid; return (<div key={msg.id} className={`flex ${isMe ? 'justify-end' : 'justify-start'}`}><div className={`max-w-[80%] p-3 rounded-2xl text-sm ${isMe ? 'bg-black text-white' : 'bg-gray-200'}`}>{msg.text}</div></div>)})}
+                          {messages.map((msg) => { 
+                            const isMe = msg.senderId === user.uid; 
+                            return (
+                                <div key={msg.id} className={`flex ${isMe ? 'justify-end' : 'justify-start'}`}>
+                                    {/* Aquí forzamos text-gray-800 cuando NO soy yo, para que se lea en gris */}
+                                    <div className={`max-w-[80%] p-3 rounded-2xl text-sm ${isMe ? 'bg-black text-white' : 'bg-gray-200 text-gray-800'}`}>
+                                        {msg.text}
+                                    </div>
+                                </div>
+                            )
+                          })}
                           <div ref={chatScrollRef} />
                       </div>
-                      <form onSubmit={sendMessage} className="p-3 bg-white border-t flex gap-2"><input type="text" className="flex-1 bg-gray-100 rounded-full px-4 py-3 outline-none" placeholder="..." value={newMessage} onChange={(e) => setNewMessage(e.target.value)} /><button type="submit" className="bg-black text-white p-3 rounded-full"><Send size={20} /></button></form>
+
+                      <form onSubmit={sendMessage} className="p-3 bg-white border-t flex gap-2">
+                          {/* 🟢 INPUT CORREGIDO: text-gray-900 */}
+                          <input type="text" className="flex-1 bg-gray-100 text-gray-900 rounded-full px-4 py-3 outline-none" placeholder="..." value={newMessage} onChange={(e) => setNewMessage(e.target.value)} />
+                          <button type="submit" className="bg-black text-white p-3 rounded-full"><Send size={20} /></button>
+                      </form>
                   </div>
               ) : (
                   <>
@@ -280,7 +295,6 @@ export default function TechnicianDashboard() {
                           {selectedOrder.status === 'pendiente' && <button onClick={() => acceptJob(selectedOrder)} className="w-full bg-yellow-400 py-3 rounded-xl font-bold">Aceptar Trabajo</button>}
                           {selectedOrder.status === 'asignado' && !showQr && (
                             <div className="grid grid-cols-3 gap-2">
-                                {/* 👇 BOTÓN WAZE MEJORADO (Se pasa el objeto completo) */}
                                 <button onClick={() => openWaze(selectedOrder)} className="p-2 bg-blue-50 text-blue-600 rounded-xl font-bold text-xs flex flex-col items-center"><Navigation size={20}/>Waze</button>
                                 <button onClick={() => setShowQr(true)} className="p-2 bg-gray-900 text-white rounded-xl font-bold text-xs flex flex-col items-center"><QrCode size={20}/>Pase</button>
                                 <button onClick={() => setShowChat(true)} className="p-2 bg-green-50 text-green-600 rounded-xl font-bold text-xs flex flex-col items-center"><MessageCircle size={20}/>Chat</button>
